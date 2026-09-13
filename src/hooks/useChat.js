@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import {
   createConversation, sendMessage, getHistory,
   getUserConversations, deleteConversation,
@@ -19,12 +19,19 @@ export function useChat(user) {
     })
   }, [user])
 
+  const creatingSession = useRef(false)
+
   const newSession = useCallback(async () => {
-    if (!user) return
-    const id = await createConversation(user.uid)
-    setSessions(prev => [{ id, title: "Cuộc trò chuyện mới", messages: [] }, ...prev])
-    setActiveId(id)
-    return id
+    if (!user || creatingSession.current) return
+    creatingSession.current = true
+    try {
+      const id = await createConversation(user.uid)
+      setSessions(prev => [{ id, title: "Cuộc trò chuyện mới", messages: [] }, ...prev])
+      setActiveId(id)
+      return id
+    } finally {
+      creatingSession.current = false
+    }
   }, [user])
 
   const selectSession = useCallback(async (id) => {
