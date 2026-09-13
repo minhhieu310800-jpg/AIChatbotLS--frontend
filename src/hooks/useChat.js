@@ -1,79 +1,67 @@
-import { useState, useCallback } from "react"
-import { createConversation, sendMessage, getHistory, deleteConversation } from "../api/client"
+import { useState, useCallback, useEffect } from "react"
+import {
+  createConversation, sendMessage, getHistory,
+  getUserConversations, deleteConversation,
+} from "../api/client"
 
-export function useChat() {
-  const [sessions, setSessions] = useState([])          // [{id, title, messages[]}]
+export function useChat(user) {
+  const [sessions, setSessions] = useState([])
   const [activeId, setActiveId] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]   = useState(false)
 
   const activeSession = sessions.find(s => s.id === activeId) || null
 
-  // Tạo phiên mới
+  useEffect(() => {
+    if (!user) { setSessions([]); setActiveId(null); return }
+    getUserConversations(user.uid).then(data => {
+      const convs = (data.conversations || []).map(c => ({ id: c.id, title: c.title, messages: [] }))
+      setSessions(convs)
+    })
+  }, [user])
+
   const newSession = useCallback(async () => {
-    const id = await createConversation()
-    const session = { id, title: "Cuộc trò chuyện mới", messages: [] }
-    setSessions(prev => [session, ...prev])
+    if (!user) return
+    const id = await createConversation(user.uid)
+    setSessions(prev => [{ id, title: "Cuộc trò chuyện mới", messages: [] }, ...prev])
     setActiveId(id)
     return id
-  }, [])
+  }, [user])
 
-  // Chọn phiên cũ + load lịch sử
   const selectSession = useCallback(async (id) => {
     setActiveId(id)
     const session = sessions.find(s => s.id === id)
     if (session && session.messages.length === 0) {
       const data = await getHistory(id)
-      setSessions(prev => prev.map(s =>
-        s.id === id ? { ...s, messages: data.messages || [] } : s
-      ))
+      setSessions(prev => prev.map(s => s.id === id ? { ...s, messages: data.messages || [] } : s))
     }
   }, [sessions])
 
-  // Gửi câu hỏi
   const sendQuestion = useCallback(async (question) => {
+    if (!user) return
     let convId = activeId
+    if (!convId) convId = await newSession()
 
-    // Nếu chưa có phiên nào, tạo mới
-    if (!convId) {
-      convId = await newSession()
-    }
-
-    // Thêm message user vào UI ngay (optimistic update)
-    const userMsg = { role: "user", content: question }
-    setSessions(prev => prev.map(s =>
-      s.id === convId
-        ? {
-            ...s,
-            title: s.title === "Cuộc trò chuyện mới" ? question.slice(0, 40) : s.title,
-            messages: [...s.messages, userMsg],
-          }
-        : s
-    ))
+    setSessions(prev => prev.map(s => s.id === convId ? {
+      ...s,
+      title: s.title === "Cuộc trò chuyện mới" ? question.slice(0, 40) : s.title,
+      messages: [...s.messages, { role: "user", content: question }],
+    } : s))
 
     setLoading(true)
     try {
-      const data = await sendMessage(convId, question)
-      const assistantMsg = {
-        role: "assistant",
-        content: data.answer,
-        sources: data.sources || [],
-      }
-      setSessions(prev => prev.map(s =>
-        s.id === convId
-          ? { ...s, messages: [...s.messages, assistantMsg] }
-          : s
-      ))
-    } catch (err) {
-      const errMsg = { role: "assistant", content: "Lỗi kết nối tới server. Vui lòng thử lại." }
-      setSessions(prev => prev.map(s =>
-        s.id === convId ? { ...s, messages: [...s.messages, errMsg] } : s
-      ))
+      const data = await sendMessage(convId, question, user.uid)
+      setSessions(prev => prev.map(s => s.id === convId ? {
+        ...s, messages: [...s.messages, { role: "assistant", content: data.answer, sources: data.sources || [] }],
+      } : s))
+    } catch {
+      setSessions(prev => prev.map(s => s.id === convId ? {
+        ...s, messages: [...s.messages, { role: "assistant", content: "Lỗi kết nối. Vui lòng thử lại." }],
+      } : s))
     } finally {
       setLoading(false)
     }
-  }, [activeId, newSession])
+  }, [activeId, user, newSession])
 
-  // Xóa phiên
   const removeSession = useCallback(async (id) => {
     await deleteConversation(id)
     setSessions(prev => prev.filter(s => s.id !== id))

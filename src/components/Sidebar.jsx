@@ -1,6 +1,6 @@
-import { Trash2, Plus, MessageSquare } from "lucide-react"
+import { Trash2, Plus, MessageSquare, LogOut } from "lucide-react"
 
-export default function Sidebar({ sessions, activeId, onNew, onSelect, onDelete }) {
+export default function Sidebar({ sessions, activeId, user, onNew, onSelect, onDelete, onLogout }) {
   return (
     <aside style={{
       width: 260, minHeight: "100vh", background: "#111827",
@@ -53,6 +53,30 @@ export default function Sidebar({ sessions, activeId, onNew, onSelect, onDelete 
           </div>
         ))}
       </div>
+
+      {/* User info + logout */}
+      {user && (
+        <div style={{
+          borderTop: "1px solid #1f2937", paddingTop: 12, marginTop: 8,
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <img src={user.avatar} alt={user.name} width={32} height={32}
+            style={{ borderRadius: "50%", flexShrink: 0 }} />
+          <span style={{
+            flex: 1, color: "#d1d5db", fontSize: 13,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {user.name}
+          </span>
+          <button onClick={onLogout} title="Đăng xuất" style={{
+            background: "none", border: "none", cursor: "pointer",
+            color: "#6b7280", padding: 4, borderRadius: 4,
+            display: "flex", alignItems: "center",
+          }}>
+            <LogOut size={15} />
+          </button>
+        </div>
+      )}
     </aside>
   )
 }
